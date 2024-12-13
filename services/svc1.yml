@@ -1,0 +1,4 @@
+name: pet-proxy
+path: pet
+target: https://dummyapi.online/api/users
+
