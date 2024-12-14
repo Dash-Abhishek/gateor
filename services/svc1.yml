@@ -1,4 +1,7 @@
-name: pet-proxy
-path: pet
-target: https://dummyapi.online/api/users
+name: demo-proxy
+basepath: /demo
+stripBasepath: true
+target: 
+  host: https://dummyapi.online
+
 

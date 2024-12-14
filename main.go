@@ -1,6 +1,7 @@
 package main
 
 import (
+	"gateor/internal"
 	"log"
 	"net"
 	"net/http"
@@ -8,13 +9,8 @@ import (
 
 func main() {
 
-	mux := http.NewServeMux()
-	trafficHandler := &TrafficHandler{mux: mux}
-	services := LoadServices()
-
-	for _, svc := range services {
-		mux.Handle("/"+svc.Path, svc)
-	}
+	mux := internal.InitializeMux()
+	internal.LoadSvc()
 
 	listener, err := net.Listen("tcp", ":8080")
 	if err != nil {
@@ -22,22 +18,8 @@ func main() {
 	}
 	defer listener.Close()
 
-	if err := http.Serve(listener, trafficHandler); err != nil {
+	if err := http.Serve(listener, mux); err != nil {
 		log.Fatalf("Error serving: %v", err)
 	}
-
-}
-
-type TrafficHandler struct {
-	mux *http.ServeMux
-}
-
-func (h *TrafficHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-
-	if h.mux != nil {
-		h.mux.ServeHTTP(w, r)
-		return
-	}
-	http.NotFound(w, r)
 
 }
