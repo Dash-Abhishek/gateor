@@ -3,5 +3,8 @@ basepath: /demo
 stripBasepath: true
 target: 
   host: https://dummyapi.online
+rateLimit: 5
+
+
 
 

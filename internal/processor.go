@@ -1,25 +1,39 @@
 package internal
 
 import (
-	"fmt"
+	"gateor/pkg"
+	"log/slog"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
 	"strings"
+	"time"
 )
 
-func preFlow(w http.ResponseWriter, r *http.Request) {
-	fmt.Println("executing default preflow")
+type reqMetaData struct {
+	StartTime     time.Time
+	ProxyDuration time.Duration
+	TotalDuration time.Duration
+	Target        string
 }
 
-func postFlow(q http.ResponseWriter, r *http.Request) {
-	fmt.Println("executing default postflow")
+func preFlow(w http.ResponseWriter, r *http.Request) {
+	pkg.Log.Debug("executing default preflow")
+}
+
+func postFlow(q http.ResponseWriter, r *http.Request, metaData reqMetaData) {
+	status := http.StatusOK
+	if w, ok := q.(interface{ Status() int }); ok {
+		status = w.Status()
+	}
+	pkg.Log.Info("request", slog.String("Path", r.URL.Path), slog.Int("status", status), slog.String("Target", metaData.Target), slog.Any("Duration", metaData.TotalDuration.Milliseconds()), slog.Any("ProxyDuration", metaData.ProxyDuration.Milliseconds()))
 }
 
 func (svc service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
+	requestStartTime := time.Now()
+
 	preFlow(w, r)
-	defer postFlow(w, r)
 
 	targetUrl, err := url.Parse(svc.Target.Host)
 	if err != nil {
@@ -27,13 +41,14 @@ func (svc service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	requestPath := r.URL.Path
 	// strip basePath
+	requestPath := r.URL.Path
 	if svc.StripBasePath {
 		requestPath = strings.TrimPrefix(r.URL.Path, svc.Path)
 	}
 
-	// TODO add rate limit
+	//  rate limit
+	svc.RateLimiter.Handle(w, r)
 
 	// reverse proxy
 	proxy := httputil.NewSingleHostReverseProxy(targetUrl)
@@ -46,6 +61,21 @@ func (svc service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		req.URL.Path = requestPath
 	}
 
+	proxyStartTime := time.Now()
 	proxy.ServeHTTP(w, r)
+
+	// total time taken by target
+	proxyDuration := time.Since(proxyStartTime)
+	// turn around time
+	totalDuration := time.Since(requestStartTime)
+
+	metaData := reqMetaData{
+		StartTime:     requestStartTime,
+		ProxyDuration: proxyDuration,
+		TotalDuration: totalDuration,
+		Target:        svc.Target.Host,
+	}
+
+	defer postFlow(w, r, metaData)
 
 }

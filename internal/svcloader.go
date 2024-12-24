@@ -2,6 +2,8 @@ package internal
 
 import (
 	"fmt"
+	"gateor/pkg"
+	"gateor/plugin"
 	"log"
 	"os"
 
@@ -13,6 +15,8 @@ type service struct {
 	Path          string `yaml:"basepath"`
 	StripBasePath bool   `yaml:"stripBasepath"`
 	Target        target `yaml:"target"`
+	RateLimit     int    `yaml:"rateLimit"`
+	RateLimiter   plugin.PluginInterface
 }
 
 type target struct {
@@ -22,6 +26,7 @@ type target struct {
 
 func LoadSvc() {
 
+	pkg.Log.Info("Loading services")
 	entry, err := os.ReadDir("services")
 	if err != nil {
 		log.Default().Println("Error reading services directory", err)
@@ -40,13 +45,14 @@ func LoadSvc() {
 				log.Default().Printf("Error unmarshalling file %s : %v\n", file.Name(), err)
 				continue
 			} else {
+				svc.RateLimiter = plugin.NewLeakyBucketRateLimit(svc.RateLimit, 10)
 				services = append(services, svc)
 			}
 
 		}
 	}
 
-	fmt.Printf("services loaded: %v", len(services))
+	fmt.Printf("services loaded: %v\n", len(services))
 
 	mux := InitializeMux()
 	for _, svc := range services {
