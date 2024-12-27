@@ -16,7 +16,7 @@ type service struct {
 	StripBasePath bool   `yaml:"stripBasepath"`
 	Target        target `yaml:"target"`
 	RateLimit     int    `yaml:"rateLimit"`
-	RateLimiter   plugin.PluginInterface
+	PluginChain   plugin.PluginInterface
 }
 
 type target struct {
@@ -45,7 +45,9 @@ func LoadSvc() {
 				log.Default().Printf("Error unmarshalling file %s : %v\n", file.Name(), err)
 				continue
 			} else {
-				svc.RateLimiter = plugin.NewLeakyBucketRateLimit(svc.RateLimit, 10)
+				pl := plugin.NewLeakyBucketRateLimit(svc.RateLimit, 10)
+				pl.AddNext(plugin.Plugin2{})
+				svc.PluginChain = pl
 				services = append(services, svc)
 			}
 

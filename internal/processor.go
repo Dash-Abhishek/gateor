@@ -47,8 +47,8 @@ func (svc service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		requestPath = strings.TrimPrefix(r.URL.Path, svc.Path)
 	}
 
-	//  rate limit
-	svc.RateLimiter.Handle(w, r)
+	//  Invoke plugins
+	svc.PluginChain.Handle(w, r)
 
 	// reverse proxy
 	proxy := httputil.NewSingleHostReverseProxy(targetUrl)
