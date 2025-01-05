@@ -9,11 +9,6 @@ import (
 	"time"
 )
 
-type PluginInterface interface {
-	Handle(w http.ResponseWriter, r *http.Request)
-	AddNext(PluginInterface)
-}
-
 type leakyBucketRateLimit struct {
 	MaxRequests int
 	Duration    int
@@ -112,20 +107,4 @@ func (l *leakyBucketRateLimit) isAllowed(user string) bool {
 	// client has 0 requests left
 	return false
 
-}
-
-type Plugin2 struct {
-	NextPlugin PluginInterface
-}
-
-func (p Plugin2) Handle(w http.ResponseWriter, r *http.Request) {
-	fmt.Println("plugin2 executed")
-	if p.NextPlugin != nil {
-		p.NextPlugin.Handle(w, r)
-	}
-
-}
-
-func (p Plugin2) AddNext(pl PluginInterface) {
-	p.NextPlugin = pl
 }
