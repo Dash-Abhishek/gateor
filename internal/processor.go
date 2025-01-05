@@ -17,11 +17,32 @@ type reqMetaData struct {
 	Target        string
 }
 
-func preFlow(w http.ResponseWriter, r *http.Request) {
-	pkg.Log.Debug("executing default preflow")
+type responseWriter struct {
+	http.ResponseWriter
+	written bool
+	status  int
 }
 
-func postFlow(q http.ResponseWriter, r *http.Request, metaData reqMetaData) {
+func (rw *responseWriter) WriteHeader(statusCode int) {
+	rw.written = true
+	rw.status = statusCode
+	rw.ResponseWriter.WriteHeader(statusCode)
+}
+
+func (rw *responseWriter) Write(b []byte) (int, error) {
+	rw.written = true
+	return rw.ResponseWriter.Write(b)
+}
+
+func (rw *responseWriter) Written() bool {
+	return rw.written
+}
+
+func (svc service) preFlow(w http.ResponseWriter, r *http.Request) {
+	svc.PluginChain.Handle(w, r)
+}
+
+func (svc service) postFlow(q http.ResponseWriter, r *http.Request, metaData reqMetaData) {
 	status := http.StatusOK
 	if w, ok := q.(interface{ Status() int }); ok {
 		status = w.Status()
@@ -33,7 +54,12 @@ func (svc service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	requestStartTime := time.Now()
 
-	preFlow(w, r)
+	respWriter := &responseWriter{ResponseWriter: w}
+
+	svc.preFlow(respWriter, r)
+	if respWriter.Written() {
+		return
+	}
 
 	targetUrl, err := url.Parse(svc.Target.Host)
 	if err != nil {
@@ -47,9 +73,6 @@ func (svc service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		requestPath = strings.TrimPrefix(r.URL.Path, svc.Path)
 	}
 
-	//  Invoke plugins
-	svc.PluginChain.Handle(w, r)
-
 	// reverse proxy
 	proxy := httputil.NewSingleHostReverseProxy(targetUrl)
 	proxy.Director = func(req *http.Request) {
@@ -62,7 +85,7 @@ func (svc service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	proxyStartTime := time.Now()
-	proxy.ServeHTTP(w, r)
+	proxy.ServeHTTP(respWriter, r)
 
 	// total time taken by target
 	proxyDuration := time.Since(proxyStartTime)
@@ -76,6 +99,6 @@ func (svc service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		Target:        svc.Target.Host,
 	}
 
-	defer postFlow(w, r, metaData)
+	go svc.postFlow(respWriter, r, metaData)
 
 }

@@ -45,6 +45,7 @@ func LoadSvc() {
 				log.Default().Printf("Error unmarshalling file %s : %v\n", file.Name(), err)
 				continue
 			} else {
+				// add plugin chain based on service configs
 				pl := plugin.NewLeakyBucketRateLimit(svc.RateLimit, 10)
 				pl.AddNext(plugin.Plugin2{})
 				svc.PluginChain = pl

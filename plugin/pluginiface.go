@@ -19,6 +19,7 @@ type leakyBucketRateLimit struct {
 	Duration    int
 	userBuckets map[string]*userBucket
 	NextPlugin  PluginInterface
+	mu          sync.Mutex
 }
 
 type userBucket struct {
@@ -40,10 +41,11 @@ func NewLeakyBucketRateLimit(maxRequests int, duration int) PluginInterface {
 
 }
 
-func (limiter leakyBucketRateLimit) refill(timer <-chan time.Time) {
+func (limiter *leakyBucketRateLimit) refill(timer <-chan time.Time) {
 
 	for t := range timer {
 		pkg.Log.Debug("TICK", slog.Any("time", t))
+		limiter.mu.Lock()
 		for user, bucket := range limiter.userBuckets {
 
 			bucket.mutex.Lock()
@@ -53,14 +55,19 @@ func (limiter leakyBucketRateLimit) refill(timer <-chan time.Time) {
 			}
 			bucket.mutex.Unlock()
 		}
+		limiter.mu.Unlock()
 	}
 }
 
 func (l *leakyBucketRateLimit) Handle(w http.ResponseWriter, r *http.Request) {
 
-	userId := r.Header["X-User-Id"]
+	apiKey, ok := r.Header["X-Api-Key"]
+	if !ok {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
 
-	if !l.isAllowed(userId[0]) {
+	if !l.isAllowed(apiKey[0]) {
 		http.Error(w, "too Many Request", http.StatusTooManyRequests)
 		return
 	}
@@ -74,7 +81,10 @@ func (l *leakyBucketRateLimit) AddNext(nextPlugin PluginInterface) {
 	l.NextPlugin = nextPlugin
 }
 
-func (l leakyBucketRateLimit) isAllowed(user string) bool {
+func (l *leakyBucketRateLimit) isAllowed(user string) bool {
+
+	l.mu.Lock()
+	defer l.mu.Unlock()
 
 	buckets, found := l.userBuckets[user]
 
