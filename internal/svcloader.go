@@ -47,7 +47,7 @@ func LoadSvc() {
 			} else {
 				// add plugin chain based on service configs
 				pl := plugin.NewLeakyBucketRateLimit(svc.RateLimit, 10)
-				pl.AddNext(plugin.Plugin2{})
+				pl.AddNext(plugin.NewJwtAuthenticator("mysecret"))
 				svc.PluginChain = pl
 				services = append(services, svc)
 			}
